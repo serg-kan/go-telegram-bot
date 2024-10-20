@@ -1,30 +1,30 @@
 package telegram
 
 import (
-	"net/http"	
-	"net/url"
-	"strconv"
-	"path"
 	"fmt"
+	"net/http"
+	"net/url"
+	"path"
+	"strconv"
 )
 
 type Client struct {
-	host	  string
-	basePath  string
-	client 	  http.Client
+	host     string
+	basePath string
+	client   http.Client
 }
 
 func New(host string, token string) {
-	return Client {
-		host: host,
+	return Client{
+		host:     host,
 		basePath: newBasePath(token),
-		client: http.Client{},
+		client:   http.Client{},
 	}
-	
+
 }
 
 func newBasePath(token string) string {
-	return "bot" + token 
+	return "bot" + token
 }
 
 func (c *Client) Updates(offset int, limit int) ([]Update, error) {
@@ -37,8 +37,8 @@ func (c *Client) Updates(offset int, limit int) ([]Update, error) {
 func (c *Client) doRequest(method string, query url.Values) ([]byte, error) {
 	url := url.URL{
 		Scheme: "https",
-		Host: c.host,
-		Path: path.Join(c.basePath, method),
+		Host:   c.host,
+		Path:   path.Join(c.basePath, method),
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url.String(), nil)
