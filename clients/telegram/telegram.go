@@ -1,11 +1,14 @@
 package telegram
 
 import (
-	"fmt"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
 	"strconv"
+
+	"github.com/serg-kan/go-telegram-bot/lib/e"
 )
 
 type Client struct {
@@ -14,27 +17,63 @@ type Client struct {
 	client   http.Client
 }
 
-func New(host string, token string) {
-	return Client{
+const (
+	getUpdatesMethod  = "getUpdates"
+	sendMessageMethod = "sendMessage"
+)
+
+func New(host string, token string) *Client {
+	return &Client{
 		host:     host,
 		basePath: newBasePath(token),
 		client:   http.Client{},
 	}
-
 }
 
 func newBasePath(token string) string {
 	return "bot" + token
 }
 
-func (c *Client) Updates(offset int, limit int) ([]Update, error) {
+func (c *Client) Updates(offset int, limit int) (updates []Update, err error) {
+	defer func() { err = e.WrapIfErr("can't get updates", err) }()
+
 	//adding query parameters
 	query := url.Values{}
 	query.Add("offset", strconv.Itoa(offset))
 	query.Add("limit", strconv.Itoa(limit))
+
+	data, err := c.doRequest(getUpdatesMethod, query)
+	if err != nil {
+		return nil, err
+	}
+
+	var res UpdatesResponse
+
+	// обязательно вторым параметром ссылку, а не значение
+	if err := json.Unmarshal(data, &res); err != nil {
+		return nil, err
+	}
+
+	return res.Result, nil
 }
 
-func (c *Client) doRequest(method string, query url.Values) ([]byte, error) {
+func (c *Client) SendMessage(chatID int, text string) error {
+	query := url.Values{}
+
+	query.Add("chatID", strconv.Itoa(chatID))
+	query.Add("text", strconv.Itoa(text))
+
+	_, err := c.doRequest(sendMessageMethod, query)
+	if err != nil {
+		return e.Wrap("can't send message", err)
+	}
+
+	return nil
+}
+
+func (c *Client) doRequest(method string, query url.Values) (data []byte, err error) {
+	defer func() { err = e.WrapIfErr("can't do request", err) }()
+
 	url := url.URL{
 		Scheme: "https",
 		Host:   c.host,
@@ -43,18 +82,23 @@ func (c *Client) doRequest(method string, query url.Values) ([]byte, error) {
 
 	req, err := http.NewRequest(http.MethodGet, url.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("can't do request: %w", err)
+		return nil, err
 	}
 
 	req.URL.RawQuery = query.Encode()
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("can't do request: %w", err)
+		return nil, err
 	}
 
-}
+	defer func() { _ = resp.Body.Close() }()
 
-func (c *Client) SendMessage() {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
 
 }
